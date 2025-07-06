@@ -1,0 +1,73 @@
+name: Deploy Static Site to GKE
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/static-site:latest .
+        docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/static-site:latest
+
+    - name: Deploy to GKE
+      run: |
+        gcloud container clusters get-credentials static-site-cluster --zone ${{ secrets.GCP_ZONE }}
+        
+        kubectl apply -f - <<EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: static-site
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: static-site
+          template:
+            metadata:
+              labels:
+                app: static-site
+            spec:
+              containers:
+              - name: static-site
+                image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/static-site:latest
+                ports:
+                - containerPort: 80
+        EOF
+
+        kubectl apply -f - <<EOF
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: static-site-service
+        spec:
+          type: LoadBalancer
+          selector:
+            app: static-site
+          ports:
+            - protocol: TCP
+              port: 80
+              targetPort: 80
+        EOF
+
+    - name: Get Service IP
+      run: kubectl get service static-site-service
