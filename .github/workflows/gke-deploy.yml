@@ -3,15 +3,12 @@ name: Deploy Static Site to GKE
 on:
   push:
     branches:
-      - master  # or 'main' depending on your default branch
+      - master
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-  GCP_ZONE: ${{ secrets.GCP_ZONE }}
-  REGION: europe-west1  # 🔁 change this to your Artifact Registry region
-  REPOSITORY: static-site-repo  # 🔁 change this to your Artifact Registry repo name
-  IMAGE: ${{ secrets.GCP_PROJECT_ID }}.docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/static-site-repo/static-site:latest
+  REGION: us-central1
+  REPOSITORY: static-site-repo
+  IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/static-site-repo/static-site:latest
 
 jobs:
   build-and-deploy:
@@ -24,13 +21,13 @@ jobs:
     - name: Set up Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
       with:
-        project_id: ${{ env.PROJECT_ID }}
-        service_account_key: ${{ env.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
         export_default_credentials: true
 
-    - name: Authenticate Docker to Artifact Registry
+    - name: Configure Docker for Artifact Registry
       run: |
-        gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+        gcloud auth configure-docker us-central1-docker.pkg.dev
 
     - name: Build Docker Image
       run: |
@@ -42,8 +39,7 @@ jobs:
 
     - name: Get GKE Credentials
       run: |
-        gcloud container clusters get-credentials static-site-cluster \
-          --zone $GCP_ZONE --project $PROJECT_ID
+        gcloud container clusters get-credentials static-site-cluster --zone ${{ secrets.GCP_ZONE }}
 
     - name: Deploy to GKE
       run: |
@@ -85,8 +81,7 @@ jobs:
         EOF
 
     - name: Get External IP of LoadBalancer
-      continue-on-error: true
       run: |
-        echo "Waiting for LoadBalancer IP..."
+        echo "Waiting for external IP..."
         sleep 60
-        kubectl get service static-site-service -o wide
+        kubectl get service static-site-service
