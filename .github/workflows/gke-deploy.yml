@@ -3,7 +3,7 @@ name: Deploy Static Site to GKE
 on:
   push:
     branches:
-      - main  # 🔁 Changed from 'master' if your default branch is 'main'
+      - master  # 🔁 Changed from 'master' if your default branch is 'main'
 
 jobs:
   build-and-deploy:
