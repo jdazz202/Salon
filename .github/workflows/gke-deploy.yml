@@ -8,7 +8,6 @@ on:
 env:
   REGION: us-central1
   REPOSITORY: static-site-repo
-  IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/static-site-repo/static-site:latest
 
 jobs:
   build-and-deploy:
@@ -25,24 +24,30 @@ jobs:
         service_account_key: ${{ secrets.GCP_SA_KEY }}
         export_default_credentials: true
 
-    - name: Configure Docker for Artifact Registry
+    - name: Configure Docker to use Artifact Registry
       run: |
-        gcloud auth configure-docker us-central1-docker.pkg.dev
+        gcloud auth configure-docker $REGION-docker.pkg.dev
 
     - name: Build Docker Image
       run: |
-        docker build -t $IMAGE .
+        IMAGE_URI=$REGION-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$REPOSITORY/static-site:latest
+        docker build -t $IMAGE_URI .
 
-    - name: Push Docker Image to Artifact Registry
+    - name: Push Docker Image
       run: |
-        docker push $IMAGE
+        IMAGE_URI=$REGION-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$REPOSITORY/static-site:latest
+        docker push $IMAGE_URI
 
     - name: Get GKE Credentials
       run: |
-        gcloud container clusters get-credentials static-site-cluster --zone ${{ secrets.GCP_ZONE }}
+        gcloud container clusters get-credentials static-site-cluster \
+          --zone ${{ secrets.GCP_ZONE }} \
+          --project ${{ secrets.GCP_PROJECT_ID }}
 
     - name: Deploy to GKE
       run: |
+        IMAGE_URI=$REGION-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$REPOSITORY/static-site:latest
+
         kubectl apply -f - <<EOF
         apiVersion: apps/v1
         kind: Deployment
@@ -60,7 +65,7 @@ jobs:
             spec:
               containers:
               - name: static-site
-                image: $IMAGE
+                image: $IMAGE_URI
                 ports:
                 - containerPort: 80
         EOF
@@ -80,7 +85,7 @@ jobs:
               targetPort: 80
         EOF
 
-    - name: Get External IP of LoadBalancer
+    - name: Get External IP
       run: |
         echo "Waiting for external IP..."
         sleep 60
